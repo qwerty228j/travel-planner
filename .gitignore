@@ -1,0 +1,27 @@
+# Окружение
+.env
+.venv/
+venv/
+env/
+
+# Python кэш
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Локальная база данных (SQLite)
+instance/
+*.db
+*.sqlite3
+
+# Настройки IDE
+.idea/
+.vscode/
+
+# Загруженные чеки (Пустая папка)
+static/receipts/*
+!static/receipts/.gitkeep
+
+# Системный мусор
+.DS_Store
+Thumbs.db

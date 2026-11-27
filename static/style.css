@@ -1,0 +1,486 @@
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+body {
+	font-family:
+		system-ui,
+		-apple-system,
+		'Segoe UI',
+		Roboto,
+		sans-serif;
+	background: #f0f2f5;
+	padding: 20px;
+}
+
+.container {
+	max-width: 1400px;
+	margin: 0 auto;
+}
+
+/* ========== ХЕДЕР ========== */
+.header {
+	background: white;
+	border-radius: 16px;
+	padding: 20px 30px;
+	margin-bottom: 30px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	flex-wrap: wrap;
+}
+
+.logo {
+	font-size: 24px;
+	font-weight: bold;
+	color: #667eea;
+}
+
+.user-info {
+	display: flex;
+	align-items: center;
+	gap: 20px;
+}
+
+.logout-btn {
+	background: #dc3545;
+	padding: 8px 20px;
+	border-radius: 25px;
+	color: white;
+	text-decoration: none;
+	font-size: 14px;
+}
+
+.logout-btn:hover {
+	background: #c82333;
+}
+
+/* ========== УВЕДОМЛЕНИЯ ========== */
+.notification-bell {
+	position: relative;
+	cursor: pointer;
+	font-size: 24px;
+}
+
+.notification-badge {
+	position: absolute;
+	top: -8px;
+	right: -8px;
+	background: #dc3545;
+	color: white;
+	font-size: 10px;
+	padding: 2px 6px;
+	border-radius: 10px;
+}
+
+.notification-panel {
+	position: absolute;
+	top: 60px;
+	right: 20px;
+	width: 350px;
+	background: white;
+	border-radius: 12px;
+	box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+	z-index: 1000;
+	display: none;
+}
+
+.notification-panel.show {
+	display: block;
+}
+
+.notification-header {
+	padding: 15px;
+	border-bottom: 1px solid #eee;
+	font-weight: bold;
+}
+
+.notification-list {
+	max-height: 300px;
+	overflow-y: auto;
+}
+
+.notification-item {
+	padding: 12px;
+	border-bottom: 1px solid #eee;
+}
+
+.notification-item small {
+	color: #999;
+	font-size: 12px;
+}
+
+.notification-empty {
+	padding: 20px;
+	text-align: center;
+	color: #999;
+}
+
+.notification-footer {
+	padding: 10px;
+	text-align: center;
+}
+
+/* ========== ФОРМА СОЗДАНИЯ ========== */
+.create-card {
+	background: white;
+	border-radius: 16px;
+	padding: 25px;
+	margin-bottom: 30px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.create-card h3 {
+	margin-bottom: 15px;
+}
+
+.form-row {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+	gap: 15px;
+	margin-bottom: 15px;
+}
+
+input,
+select,
+textarea {
+	padding: 12px;
+	border: 1px solid #ddd;
+	border-radius: 10px;
+	font-size: 14px;
+	width: 100%;
+	font-family: inherit;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+	outline: none;
+	border-color: #667eea;
+}
+
+/* ========== КНОПКИ ========== */
+.btn {
+	padding: 12px 24px;
+	border: none;
+	border-radius: 10px;
+	cursor: pointer;
+	font-size: 14px;
+	font-weight: 500;
+	transition: all 0.2s;
+}
+
+.btn-primary {
+	background: #667eea;
+	color: white;
+}
+
+.btn-primary:hover {
+	background: #5a67d8;
+	transform: translateY(-2px);
+}
+
+.btn-success {
+	background: #28a745;
+	color: white;
+}
+
+.btn-success:hover {
+	background: #218838;
+}
+
+.btn-danger {
+	background: #dc3545;
+	color: white;
+}
+
+.btn-danger:hover {
+	background: #c82333;
+}
+
+.btn-warning {
+	background: #ffc107;
+	color: #333;
+}
+
+.btn-warning:hover {
+	background: #e0a800;
+}
+
+.btn-sm {
+	padding: 6px 12px;
+	font-size: 12px;
+}
+
+/* ========== КАРТОЧКИ ПУТЕШЕСТВИЙ ========== */
+.trips-grid {
+	display: grid;
+	gap: 20px;
+}
+
+.empty-state {
+	text-align: center;
+	padding: 40px;
+	background: white;
+	border-radius: 16px;
+}
+
+.trip-card {
+	background: white;
+	border-radius: 16px;
+	overflow: hidden;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.trip-header {
+	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	color: white;
+	padding: 20px 25px;
+	cursor: pointer;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	flex-wrap: wrap;
+}
+
+.trip-header h3 {
+	font-size: 20px;
+}
+
+.trip-info {
+	padding: 20px 25px;
+	background: #f8f9fa;
+	display: flex;
+	gap: 20px;
+	flex-wrap: wrap;
+	border-bottom: 1px solid #eee;
+	align-items: center;
+}
+
+.trip-info span {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+/* ========== ВКЛАДКИ ========== */
+.trip-tabs {
+	padding: 0 25px;
+	display: flex;
+	gap: 5px;
+	background: #f8f9fa;
+	border-bottom: 1px solid #eee;
+	flex-wrap: wrap;
+}
+
+.tab {
+	padding: 12px 20px;
+	cursor: pointer;
+	border-radius: 10px 10px 0 0;
+	transition: 0.2s;
+	white-space: nowrap;
+}
+
+.tab:hover {
+	background: #e9ecef;
+}
+
+.tab.active {
+	background: white;
+	border-top: 3px solid #667eea;
+	font-weight: bold;
+}
+
+.tab-content {
+	padding: 20px 25px;
+	display: none;
+}
+
+.tab-content.active {
+	display: block;
+}
+
+.tab-content h4 {
+	margin: 15px 0 10px 0;
+}
+
+/* ========== СПИСКИ ========== */
+.list-item {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 12px;
+	border-bottom: 1px solid #eee;
+	gap: 10px;
+}
+
+.list-item:last-child {
+	border-bottom: none;
+}
+
+.list-item.completed {
+	text-decoration: line-through;
+	color: #999;
+}
+
+.amount {
+	font-weight: bold;
+	color: #28a745;
+}
+
+/* ========== СМЕТА ========== */
+.summary-box {
+	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	color: white;
+	padding: 20px 25px;
+	border-radius: 12px;
+	margin-bottom: 20px;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.summary-box .label {
+	font-size: 16px;
+	opacity: 0.9;
+}
+
+.summary-box .total {
+	font-size: 28px;
+	font-weight: bold;
+}
+
+/* ========== КАРТОЧКИ МЕСТ (WISHLIST) ========== */
+.places-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+	gap: 15px;
+	margin-top: 15px;
+}
+
+.place-card {
+	background: white;
+	border-radius: 12px;
+	overflow: hidden;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+	display: flex;
+	flex-direction: column;
+	transition: transform 0.2s;
+	border: 1px solid #eee;
+}
+
+.place-card:hover {
+	transform: translateY(-3px);
+	box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+
+.place-card img {
+	width: 100%;
+	height: 150px;
+	object-fit: cover;
+	background: #f0f2f5;
+}
+
+.place-card-body {
+	padding: 15px;
+	flex-grow: 1;
+}
+
+.place-card-body h5 {
+	margin-bottom: 5px;
+	font-size: 16px;
+	color: #333;
+	word-break: break-word;
+}
+
+.place-card-body p {
+	font-size: 13px;
+	color: #666;
+	margin-bottom: 8px;
+}
+
+.place-card-body .notes {
+	font-size: 12px;
+	color: #999;
+	font-style: italic;
+}
+
+.place-card-actions {
+	display: flex;
+	justify-content: space-between;
+	padding: 10px 15px;
+	background: #f8f9fa;
+	border-top: 1px solid #eee;
+	gap: 5px;
+}
+
+.place-card-actions a {
+	text-decoration: none;
+	color: #667eea;
+	font-size: 13px;
+}
+
+/* ========== КАРТА ========== */
+#map-container {
+	height: 450px;
+	width: 100%;
+	border-radius: 12px;
+	margin-top: 15px;
+	margin-bottom: 20px;
+	z-index: 1;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* ========== ДОЛГИ ========== */
+.debt-item {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 15px;
+	background: #fff3cd;
+	border-radius: 10px;
+	margin-bottom: 10px;
+	border-left: 4px solid #ffc107;
+}
+
+.debt-item .debt-info {
+	font-size: 14px;
+}
+
+.debt-item .debt-amount {
+	font-weight: bold;
+	color: #dc3545;
+	font-size: 16px;
+}
+
+.debt-empty {
+	padding: 20px;
+	text-align: center;
+	background: #d4edda;
+	color: #155724;
+	border-radius: 10px;
+	font-weight: 500;
+}
+
+/* ========== АДАПТИВ ========== */
+@media (max-width: 768px) {
+	.header {
+		flex-direction: column;
+		gap: 15px;
+	}
+	.trip-header {
+		flex-direction: column;
+		gap: 10px;
+	}
+	.trip-tabs {
+		overflow-x: auto;
+	}
+	.summary-box {
+		flex-direction: column;
+		gap: 10px;
+		text-align: center;
+	}
+}

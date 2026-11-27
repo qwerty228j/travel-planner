@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Поехали вместе</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+            display: none; justify-content: center; align-items: center; z-index: 5000; }
+        .modal-overlay.show { display: flex; }
+        .modal-box { background: white; border-radius: 16px; padding: 25px;
+            max-width: 700px; width: 90%; max-height: 85vh; overflow-y: auto; }
+        .modal-box h3 { margin-bottom: 15px; }
+        .inv-item { padding: 15px; border: 1px solid #eee; border-radius: 12px;
+            margin-bottom: 10px; background: #f8f9fa; }
+        .inv-item .actions { display: flex; gap: 8px; margin-top: 10px; }
+        .budget-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px; margin-bottom: 20px; }
+        .budget-card { background: white; border-radius: 12px; padding: 15px;
+            text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border-left: 4px solid #667eea; }
+        .budget-card.spent { border-left-color: #dc3545; }
+        .budget-card.remaining { border-left-color: #28a745; }
+        .budget-card .label { font-size: 13px; color: #666; margin-bottom: 5px; }
+        .budget-card .value { font-size: 22px; font-weight: bold; color: #333; }
+        .budget-card.remaining .value.negative { color: #dc3545; }
+        .stops-block { font-family: inherit; }
+        .receipt-item-row { display: grid; grid-template-columns: 2fr 1fr 1fr 3fr auto; gap: 8px;
+            align-items: center; padding: 8px 0; border-bottom: 1px solid #eee; }
+        .receipt-item-row input { padding: 6px; font-size: 13px; }
+        .receipt-user-badges { display: flex; flex-wrap: wrap; gap: 4px; }
+        .receipt-user-badge { padding: 4px 8px; border-radius: 12px; font-size: 12px;
+            cursor: pointer; background: #e9ecef; color: #333; border: 2px solid transparent; }
+        .receipt-user-badge.selected { background: #667eea; color: white; border-color: #4c5fd5; }
+        .receipt-total { font-size: 18px; font-weight: bold; color: #28a745; margin: 15px 0; }
+        .receipt-card { background: #f8f9fa; padding: 12px; border-radius: 10px;
+            margin-bottom: 10px; border-left: 4px solid #667eea; }
+        .receipt-card img { max-width: 80px; border-radius: 6px; float: right; }
+
+        /* Красивые чекбоксы мест в маршруте */
+        .route-place-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 10px 12px;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.15s;
+            border: 1px solid #e9ecef;
+        }
+        .route-place-item:hover {
+            background: #f0f4ff;
+            border-color: #667eea;
+        }
+        .route-place-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            margin-top: 2px;
+            cursor: pointer;
+            accent-color: #667eea;
+            flex-shrink: 0;
+        }
+        .route-place-info {
+            flex: 1;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        .route-place-info b {
+            color: #333;
+            font-weight: 600;
+        }
+        .route-place-info small {
+            display: block;
+            color: #999;
+            font-size: 12px;
+            margin-top: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🌍 Поехали вместе</div>
+            <div class="user-info">
+                <div class="notification-bell" onclick="openInvitations()" title="Приглашения" style="cursor:pointer; font-size:24px; position:relative;">
+                    ✉️
+                    <span id="invBadge" class="notification-badge" style="display: none;">0</span>
+                </div>
+                <div class="notification-bell" onclick="toggleNotifications()">
+                    🔔
+                    <span id="notifBadge" class="notification-badge" style="display: none;">0</span>
+                    <div id="notificationPanel" class="notification-panel">
+                        <div class="notification-header">Уведомления</div>
+                        <div id="notifList" class="notification-list"></div>
+                        <div class="notification-footer">
+                            <button class="btn btn-sm btn-primary" onclick="markAllNotificationsRead()">Прочитать все</button>
+                        </div>
+                    </div>
+                </div>
+                <a href="/logout" class="logout-btn">Выйти</a>
+            </div>
+        </div>
+
+        <div class="create-card">
+            <h3>✈️ Создать путешествие</h3>
+            <div class="form-row">
+                <input type="text" id="tripName" placeholder="Название">
+                <input type="text" id="tripDestination" placeholder="Направление (город!)">
+                <input type="date" id="tripStart">
+                <input type="date" id="tripEnd">
+                <input type="number" id="tripBudget" placeholder="Бюджет">
+            </div>
+            <button class="btn btn-primary" onclick="createTrip()">Создать путешествие</button>
+        </div>
+
+        <div class="trips-grid" id="tripsList"></div>
+    </div>
+
+    <div id="invModal" class="modal-overlay">
+        <div class="modal-box">
+            <h3>✉️ Ваши приглашения</h3>
+            <div id="invList"></div>
+            <button class="btn btn-danger" style="margin-top:15px; width:100%;" onclick="closeInvitations()">Закрыть</button>
+        </div>
+    </div>
+
+    <div id="receiptModal" class="modal-overlay">
+        <div class="modal-box">
+            <h3>🧾 Разбивка чека</h3>
+            <div id="receiptModalContent"></div>
+            <div style="display:flex; gap:8px; margin-top:15px;">
+                <button class="btn btn-success" style="flex:1;" onclick="saveReceipt()">✅ Сохранить и рассчитать</button>
+                <button class="btn btn-danger" onclick="closeReceiptModal()">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let maps = {};
+        let currentReceipt = null;
+        let currentParticipants = [];
+
+        async function loadTrips() {
+            const res = await fetch('/api/trips');
+            const trips = await res.json();
+            const container = document.getElementById('tripsList');
+            if (trips.length === 0) {
+                container.innerHTML = '<div class="empty-state">Нет путешествий. Создайте первое!</div>';
+                return;
+            }
+            container.innerHTML = trips.map(trip => `
+                <div class="trip-card" data-trip-id="${trip.id}">
+                    <div class="trip-header" onclick="toggleTrip(${trip.id})">
+                        <h3>✈️ ${escapeHtml(trip.name)}</h3>
+                        <span>📍 ${trip.destination || 'Не указано'}</span>
+                    </div>
+                    <div class="trip-info">
+                        <span>📅 ${trip.start_date || '?'} → ${trip.end_date || '?'}</span>
+                        <span>💰 ${trip.budget || 0} ₽</span>
+                        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deleteTrip(${trip.id})">Удалить</button>
+                    </div>
+                    <div id="tripContent-${trip.id}" style="display: none;">
+                        <div class="trip-tabs">
+                            <div class="tab active" data-tab="expenses-${trip.id}" onclick="switchTab(${trip.id}, 'expenses')">💰 Смета</div>
+                            <div class="tab" data-tab="wishlist-${trip.id}" onclick="switchTab(${trip.id}, 'wishlist')">⭐ Хочу сходить</div>
+                            <div class="tab" data-tab="checklist-${trip.id}" onclick="switchTab(${trip.id}, 'checklist')">📋 Чек-лист</div>
+                            <div class="tab" data-tab="places-${trip.id}" onclick="switchTab(${trip.id}, 'places')">🗺️ Маршрут</div>
+                            <div class="tab" data-tab="debts-${trip.id}" onclick="switchTab(${trip.id}, 'debts')">🔄 Долги</div>
+                            <div class="tab" data-tab="participants-${trip.id}" onclick="switchTab(${trip.id}, 'participants')">👥 Участники</div>
+                        </div>
+
+                        <div id="tab-expenses-${trip.id}" class="tab-content active">
+                            <div class="budget-grid" id="budgetGrid-${trip.id}"></div>
+                            <h4>➕ Добавить расход (просто поделить на всех)</h4>
+                            <div class="form-row">
+                                <input type="text" id="expenseDesc-${trip.id}" placeholder="Описание">
+                                <input type="number" id="expenseAmount-${trip.id}" placeholder="Сумма">
+                                <input type="date" id="expenseDate-${trip.id}">
+                            </div>
+                            <button class="btn btn-primary btn-sm" onclick="addExpense(${trip.id})">Добавить расход</button>
+
+                            <h4 style="margin-top:20px;">🧾 Загрузить чек (разбить по позициям)</h4>
+                            <p style="font-size:13px;color:#666;margin-bottom:10px;">
+                                Сфотографируй чек и загрузи. Мы распознаем позиции — потом отметишь, кто что брал.
+                                Если OCR не сработает — добавишь позиции вручную.
+                            </p>
+                            <div class="form-row">
+                                <input type="file" id="receiptFile-${trip.id}" accept="image/*">
+                            </div>
+                            <button class="btn btn-success btn-sm" onclick="uploadReceipt(${trip.id})">📸 Загрузить и распознать</button>
+
+                            <h4 style="margin-top:20px;">📋 Загруженные чеки</h4>
+                            <div id="receiptsList-${trip.id}"></div>
+
+                            <h4>📋 История расходов</h4>
+                            <div id="expensesList-${trip.id}"></div>
+                        </div>
+
+                        <div id="tab-wishlist-${trip.id}" class="tab-content">
+                            <h4>➕ Добавить место, куда хочу сходить</h4>
+                            <p style="font-size:13px;color:#666;margin-bottom:10px;">
+                                💡 Чтобы место появилось на карте, укажи <b>город</b> в адресе.
+                            </p>
+                            <div class="form-row">
+                                <input type="text" id="wishlistLink-${trip.id}" placeholder="Ссылка (необязательно)">
+                            </div>
+                            <div class="form-row">
+                                <input type="text" id="wishlistName-${trip.id}" placeholder="Название места">
+                                <input type="text" id="wishlistAddress-${trip.id}" placeholder="Адрес (с городом!)">
+                                <input type="date" id="wishlistDate-${trip.id}">
+                                <input type="time" id="wishlistTime-${trip.id}">
+                            </div>
+                            <details style="margin-bottom:10px;">
+                                <summary style="cursor:pointer;font-size:13px;color:#667eea;">📍 Ввести координаты вручную</summary>
+                                <div class="form-row" style="margin-top:10px;">
+                                    <input type="number" step="any" id="wishlistLat-${trip.id}" placeholder="Широта">
+                                    <input type="number" step="any" id="wishlistLng-${trip.id}" placeholder="Долгота">
+                                </div>
+                            </details>
+                            <button class="btn btn-primary btn-sm" onclick="addWishlistPlace(${trip.id})">Добавить место</button>
+                            <h4>⭐ Места, куда хочу сходить</h4>
+                            <div id="wishlist-${trip.id}" class="places-grid"></div>
+                        </div>
+
+                        <div id="tab-checklist-${trip.id}" class="tab-content">
+                            <h4>➕ Добавить вещь</h4>
+                            <div class="form-row">
+                                <input type="text" id="checklistItem-${trip.id}" placeholder="Название вещи">
+                                <select id="checklistAssigned-${trip.id}"></select>
+                            </div>
+                            <button class="btn btn-primary btn-sm" onclick="addChecklistItem(${trip.id})">Добавить</button>
+                            <h4>📋 Список вещей</h4>
+                            <div id="checklistList-${trip.id}"></div>
+                        </div>
+
+                        <div id="tab-places-${trip.id}" class="tab-content">
+                            <h4>🚩 Стартовая точка маршрута</h4>
+                            <div class="form-row">
+                                <input type="text" id="routeStart-${trip.id}" placeholder="Адрес старта (с городом!)">
+                            </div>
+                            <button class="btn btn-primary btn-sm" onclick="setRouteStart(${trip.id})">💾 Сохранить старт</button>
+                            <div id="routeStartInfo-${trip.id}" style="margin-top:10px;"></div>
+
+                            <h4 style="margin-top:20px;">🗺️ Выбери, куда строить маршрут</h4>
+                            <div style="background:#f8f9fa; padding:12px; border-radius:10px; margin-bottom:12px;">
+                                <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
+                                    <button class="btn btn-warning btn-sm" onclick="routeSelectAll(${trip.id}, true)">✅ Выбрать все</button>
+                                    <button class="btn btn-warning btn-sm" onclick="routeSelectAll(${trip.id}, false)">❌ Снять все</button>
+                                    <button class="btn btn-success btn-sm" onclick="buildRoute(${trip.id})">🚗 Построить маршрут</button>
+                                </div>
+                                <div id="routePlaceList-${trip.id}" style="display:flex; flex-direction:column; gap:8px;"></div>
+                            </div>
+
+                            <div id="map-${trip.id}" style="height: 500px; border-radius: 12px; margin-bottom: 15px;"></div>
+                            <div id="routeInfo-${trip.id}" style="padding:15px; background:#f8f9fa; border-radius:10px; margin-bottom:15px; display:none;"></div>
+
+                            <h4>📍 Все места</h4>
+                            <div id="placesList-${trip.id}"></div>
+                        </div>
+
+                        <div id="tab-debts-${trip.id}" class="tab-content">
+                            <div id="debtsList-${trip.id}"></div>
+                            <button class="btn btn-warning btn-sm" onclick="calculateDebts(${trip.id})">🔄 Пересчитать долги</button>
+                        </div>
+
+                        <div id="tab-participants-${trip.id}" class="tab-content">
+                            <h4>➕ Пригласить участника</h4>
+                            <div class="form-row">
+                                <input type="text" id="participantLogin-${trip.id}" placeholder="Логин пользователя">
+                            </div>
+                            <button class="btn btn-primary btn-sm" onclick="inviteParticipant(${trip.id})">Отправить приглашение</button>
+                            <h4>👥 Участники поездки</h4>
+                            <div id="participantsList-${trip.id}"></div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            for (const trip of trips) {
+                await loadExpenses(trip.id);
+                await loadChecklist(trip.id);
+                await loadPlaces(trip.id);
+                await loadDebts(trip.id);
+                await loadParticipants(trip.id);
+                await loadBudget(trip.id);
+                await loadRouteStart(trip.id);
+                await loadReceipts(trip.id);
+            }
+        }
+
+        function toggleTrip(tripId) {
+            const c = document.getElementById(`tripContent-${tripId}`);
+            c.style.display = c.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function switchTab(tripId, tabName) {
+            document.querySelectorAll(`#tripContent-${tripId} .tab`).forEach(t => t.classList.remove('active'));
+            document.querySelectorAll(`#tripContent-${tripId} .tab-content`).forEach(c => c.classList.remove('active'));
+            document.querySelector(`#tripContent-${tripId} .tab[data-tab="${tabName}-${tripId}"]`).classList.add('active');
+            document.getElementById(`tab-${tabName}-${tripId}`).classList.add('active');
+            if (tabName === 'places') setTimeout(() => initMap(tripId), 200);
+        }
+
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]);
+        }
+
+        async function createTrip() {
+            const trip = {
+                name: document.getElementById('tripName').value,
+                destination: document.getElementById('tripDestination').value,
+                start_date: document.getElementById('tripStart').value,
+                end_date: document.getElementById('tripEnd').value,
+                budget: parseFloat(document.getElementById('tripBudget').value) || 0
+            };
+            await fetch('/api/trips', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(trip)});
+            location.reload();
+        }
+
+        async function deleteTrip(id) {
+            if (confirm('Удалить путешествие?')) {
+                await fetch(`/api/trips/${id}`, {method:'DELETE'});
+                location.reload();
+            }
+        }
+
+        async function loadBudget(tripId) {
+            const res = await fetch(`/api/trips/${tripId}/budget`);
+            const b = await res.json();
+            const grid = document.getElementById(`budgetGrid-${tripId}`);
+            if (!grid) return;
+            const cls = b.remaining < 0 ? 'negative' : '';
+            grid.innerHTML = `
+                <div class="budget-card"><div class="label">💼 Бюджет</div><div class="value">${b.total_budget} ₽</div></div>
+                <div class="budget-card spent"><div class="label">💸 Потрачено</div><div class="value">${b.spent} ₽</div></div>
+                <div class="budget-card remaining"><div class="label">✅ Осталось</div><div class="value ${cls}">${b.remaining} ₽</div></div>
+            `;
+        }
+
+        async function addExpense(tripId) {
+            const expense = {
+                amount: parseFloat(document.getElementById(`expenseAmount-${tripId}`).value),
+                description: document.getElementById(`expenseDesc-${tripId}`).value,
+                date: document.getElementById(`expenseDate-${tripId}`).value || new Date().toISOString().split('T')[0]
+            };
+            if (!expense.amount || !expense.description) return alert('Заполните поля');
+            await fetch(`/api/trips/${tripId}/expenses`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(expense)});
+            document.getElementById(`expenseAmount-${tripId}`).value = '';
+            document.getElementById(`expenseDesc-${tripId}`).value = '';
+            await loadExpenses(tripId);
+            await loadDebts(tripId);
+            await loadBudget(tripId);
+        }
+
+        async function loadExpenses(tripId) {
+            const res = await fetch(`/api/trips/${tripId}/expenses`);
+            const data = await res.json();
+            const c = document.getElementById(`expensesList-${tripId}`);
+            if (c) {
+                c.innerHTML = data.expenses.length === 0
+                    ? '<div style="padding:20px;text-align:center;color:#999;">Пока нет расходов</div>'
+                    : data.expenses.map(e => `
+                        <div class="list-item">
+                            <div><strong>${escapeHtml(e.description)}</strong><br><small style="color:#999;">${e.date}</small></div>
+                            <div style="text-align:right;">
+                                <span class="amount">${e.amount} ₽</span><br>
+                                <small>👤 ${escapeHtml(e.paid_by)}</small>
+                            </div>
+                        </div>`).join('');
+            }
+        }
+
+        // ===== ЧЕКИ =====
+        async function uploadReceipt(tripId) {
+            const input = document.getElementById(`receiptFile-${tripId}`);
+            if (!input.files || !input.files[0]) return alert('Выбери файл');
+            const fd = new FormData();
+            fd.append('image', input.files[0]);
+
+            const info = document.createElement('div');
+            info.style = 'padding:10px;background:#fff3cd;border-radius:8px;margin-top:10px;';
+            info.textContent = '⏳ Распознаём чек, подожди 10-30 секунд...';
+            input.parentElement.appendChild(info);
+
+            try {
+                const res = await fetch(`/api/trips/${tripId}/receipts/upload`, {method:'POST', body: fd});
+                const data = await res.json();
+                info.remove();
+                if (!data.success) { alert('Ошибка: ' + (data.error || 'не удалось')); return; }
+                if (data.items_count === 0) {
+                    alert('⚠️ Позиции не распознаны. Открываем окно — добавь их вручную.');
+                } else {
+                    alert(`✅ Распознано позиций: ${data.items_count}`);
+                }
+                await loadReceipts(tripId);
+                await loadParticipants(tripId);
+                openReceiptEditor(data.receipt_id);
+            } catch (e) {
+                info.remove();
+                alert('Ошибка: ' + e);
+            }
+        }
+
+        async function loadReceipts(tripId) {
+            const res = await fetch(`/api/trips/${tripId}/receipts`);
+            const receipts = await res.json();
+            const c = document.getElementById(`receiptsList-${tripId}`);
+            if (!c) return;
+            if (receipts.length === 0) {
+                c.innerHTML = '<div style="padding:15px;color:#999;">Пока нет загруженных чеков</div>';
+                return;
+            }
+            c.innerHTML = receipts.map(r => `
+                <div class="receipt-card">
+                    ${r.image_url ? `<img src="${r.image_url}" alt="чек">` : ''}
+                    <div><b>Чек №${r.id}</b> · ${r.items_count} поз.</div>
+                    <small style="color:#666;">👤 ${escapeHtml(r.uploaded_by)} · ${r.created_at}</small>
+                    <div style="margin-top:6px;">
+                        <span style="padding:2px 8px;border-radius:10px;font-size:11px;${r.status === 'confirmed' ? 'background:#d4edda;color:#155724;' : 'background:#fff3cd;color:#856404;'}">
+                            ${r.status === 'confirmed' ? '✅ Подтверждён' : '⏳ Ожидает разбивки'}
+                        </span>
+                    </div>
+                    <div style="margin-top:8px;display:flex;gap:6px;">
+                        <button class="btn btn-primary btn-sm" onclick="openReceiptEditor(${r.id})">✏️ Открыть</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteReceipt(${r.id}, ${tripId})">🗑️</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function deleteReceipt(id, tripId) {
+            if (!confirm('Удалить чек?')) return;
+            await fetch(`/api/receipts/${id}`, {method:'DELETE'});
+            await loadReceipts(tripId);
+            await loadExpenses(tripId);
+            await loadDebts(tripId);
+            await loadBudget(tripId);
+        }
+
+        async function openReceiptEditor(receiptId) {
+            const res = await fetch(`/api/receipts/${receiptId}`);
+            const r = await res.json();
+            if (!r.id) return alert('Чек не найден');
+            currentReceipt = r;
+            const tripId = r.trip_id;
+            const pRes = await fetch(`/api/trips/${tripId}/participants`);
+            currentParticipants = await pRes.json();
+
+            const html = `
+                <div style="margin-bottom:10px;">
+                    ${r.image_url ? `<img src="${r.image_url}" style="max-width:150px;border-radius:8px;">` : ''}
+                    <div style="font-size:13px;color:#666;margin-top:6px;">👤 Загрузил: ${escapeHtml(r.uploaded_by)}</div>
+                </div>
+                <div class="receipt-total">Итого: <span id="receiptTotal">${r.total_amount}</span> ₽</div>
+                <div style="display:grid; grid-template-columns:2fr 1fr 1fr 3fr auto; gap:8px; font-weight:bold; font-size:13px; border-bottom:2px solid #ddd; padding-bottom:6px; margin-bottom:6px;">
+                    <div>Название</div><div>Цена</div><div>Кол-во</div><div>Кто брал</div><div></div>
+                </div>
+                <div id="receiptItemsList">
+                    ${r.items.length === 0
+                        ? '<div style="padding:15px;text-align:center;color:#999;">Позиции не распознаны. Добавь их вручную ниже ⬇️</div>'
+                        : r.items.map(it => renderReceiptItemRow(it)).join('')}
+                </div>
+                <div style="margin-top:12px; text-align:center;">
+                    <button class="btn btn-primary btn-sm" onclick="addReceiptItemManually()">➕ Добавить позицию вручную</button>
+                </div>
+                <p style="font-size:12px;color:#666;margin-top:10px;">
+                    💡 Нажми на имена участников, чтобы отметить, кто брал позицию.
+                    Если никто не отмечен — позиция делится на всех.
+                </p>
+            `;
+            document.getElementById('receiptModalContent').innerHTML = html;
+            document.getElementById('receiptModal').classList.add('show');
+        }
+
+        function renderReceiptItemRow(it) {
+            const shared = (it.shared_by || '').split(',').filter(x => x.trim()).map(x => parseInt(x));
+            const isNew = it.id < 0 ? 'data-is-new="1"' : '';
+            return `
+                <div class="receipt-item-row" data-item-id="${it.id}" ${isNew}>
+                    <input type="text" value="${escapeHtml(it.name)}" onchange="updateReceiptItemField(${it.id}, 'name', this.value)">
+                    <input type="number" step="0.01" value="${it.price}" onchange="updateReceiptItemField(${it.id}, 'price', this.value)">
+                    <input type="number" step="0.01" value="${it.quantity}" onchange="updateReceiptItemField(${it.id}, 'quantity', this.value)">
+                    <div class="receipt-user-badges">
+                        ${currentParticipants.map(p => `
+                            <span class="receipt-user-badge ${shared.includes(p.id) ? 'selected' : ''}"
+                                  onclick="toggleReceiptUser(${it.id}, ${p.id})">${escapeHtml(p.login)}</span>
+                        `).join('')}
+                    </div>
+                    <button class="btn btn-danger btn-sm" onclick="removeReceiptItem(${it.id})" style="padding:4px 8px;">🗑️</button>
+                </div>
+            `;
+        }
+
+        function addReceiptItemManually() {
+            if (!currentReceipt) return;
+            const tempId = -Date.now();
+            currentReceipt.items.push({
+                id: tempId,
+                name: 'Новая позиция',
+                price: 0,
+                quantity: 1,
+                shared_by: ''
+            });
+            document.getElementById('receiptItemsList').innerHTML = currentReceipt.items.map(it => renderReceiptItemRow(it)).join('');
+            recalcReceiptTotal();
+        }
+
+        function removeReceiptItem(itemId) {
+            if (!currentReceipt) return;
+            if (!confirm('Удалить позицию?')) return;
+            currentReceipt.items = currentReceipt.items.filter(i => i.id !== itemId);
+            document.getElementById('receiptItemsList').innerHTML = currentReceipt.items.map(it => renderReceiptItemRow(it)).join('');
+            recalcReceiptTotal();
+        }
+
+        function updateReceiptItemField(itemId, field, value) {
+            const item = currentReceipt.items.find(i => i.id === itemId);
+            if (!item) return;
+            if (field === 'name') item.name = value;
+            if (field === 'price') item.price = parseFloat(value) || 0;
+            if (field === 'quantity') item.quantity = parseFloat(value) || 1;
+            recalcReceiptTotal();
+        }
+
+        function toggleReceiptUser(itemId, userId) {
+            const item = currentReceipt.items.find(i => i.id === itemId);
+            if (!item) return;
+            let shared = (item.shared_by || '').split(',').filter(x => x.trim()).map(x => parseInt(x));
+            if (shared.includes(userId)) shared = shared.filter(x => x !== userId);
+            else shared.push(userId);
+            item.shared_by = shared.join(',');
+            const row = document.querySelector(`.receipt-item-row[data-item-id="${itemId}"]`);
+            if (row) row.outerHTML = renderReceiptItemRow(item);
+        }
+
+        function recalcReceiptTotal() {
+            const total = currentReceipt.items.reduce((s, i) => s + i.price * i.quantity, 0);
+            document.getElementById('receiptTotal').textContent = total.toFixed(2);
+        }
+
+        async function saveReceipt() {
+            if (!currentReceipt) return;
+            if (currentReceipt.items.length === 0) return alert('Добавь хотя бы одну позицию');
+            const res = await fetch(`/api/receipts/${currentReceipt.id}/items`, {
+                method: 'PUT', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({items: currentReceipt.items})
+            });
+            if (!res.ok) return alert('Ошибка сохранения');
+            await fetch(`/api/receipts/${currentReceipt.id}/confirm`, {method:'POST'});
+            closeReceiptModal();
+            await loadTrips();
+            alert('✅ Чек сохранён, долги пересчитаны');
+        }
+
+        function closeReceiptModal() {
+            document.getElementById('receiptModal').classList.remove('show');
+            currentReceipt = null;
+        }
+
+        // ===== ЧЕК-ЛИСТ =====
+        async function addChecklistItem(tripId) {
+            const item = {
+                item_name: document.getElementById(`checklistItem-${tripId}`).value,
+                assigned_to: document.getElementById(`checklistAssigned-${tripId}`).value
+            };
+            if (!item.item_name) return alert('Введите название');
+            await fetch(`/api/trips/${tripId}/checklist`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(item)});
+            document.getElementById(`checklistItem-${tripId}`).value = '';
+            await loadChecklist(tripId);
+        }
+
+        async function loadChecklist(tripId) {
+            const res = await fetch(`/api/trips/${tripId}/checklist`);
+            const items = await res.json();
+            const c = document.getElementById(`checklistList-${tripId}`);
+            if (c) {
+                c.innerHTML = items.length === 0
+                    ? '<div style="padding:15px;color:#999;">Список пуст</div>'
+                    : items.map(i => `
+                        <div class="list-item ${i.is_checked ? 'completed' : ''}">
+                            <span>${escapeHtml(i.item_name)}</span>
+                            <span>👤 ${escapeHtml(i.assigned_to_name || 'не назначен')}</span>
+                            ${!i.is_checked ? `<button class="btn btn-success btn-sm" onclick="checkItem(${i.id})">✅</button>` : '<span>✅</span>'}
+                        </div>`).join('');
+            }
+        }
+
+        async function checkItem(id) {
+            await fetch(`/api/checklist/${id}/check`, {method:'PUT'});
+            location.reload();
+        }
+
+        // ===== МЕСТА =====
+        async function addWishlistPlace(tripId) {
+            const latVal = document.getElementById(`wishlistLat-${tripId}`).value;
+            const lngVal = document.getElementById(`wishlistLng-${tripId}`).value;
+            const body = {
+                source_url: document.getElementById(`wishlistLink-${tripId}`).value.trim() || null,
+                name: document.getElementById(`wishlistName-${tripId}`).value.trim() || null,
+                address: document.getElementById(`wishlistAddress-${tripId}`).value.trim() || null,
+                visit_date: document.getElementById(`wishlistDate-${tripId}`).value || null,
+                visit_time: document.getElementById(`wishlistTime-${tripId}`).value || null,
+                latitude: latVal ? parseFloat(latVal) : null,
+                longitude: lngVal ? parseFloat(lngVal) : null
+            };
+            if (!body.source_url && !body.name) return alert('Вставьте ссылку ИЛИ введите название');
+            const res = await fetch(`/api/trips/${tripId}/places`, {
+                method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+            });
+            if (res.ok) {
+                const data = await res.json();
+                ['wishlistLink','wishlistName','wishlistAddress','wishlistDate','wishlistTime','wishlistLat','wishlistLng']
+                    .forEach(k => { const el = document.getElementById(`${k}-${tripId}`); if (el) el.value = ''; });
+                if (data.latitude && data.longitude) alert('✅ Место добавлено!');
+                else alert('⚠️ Координаты не найдены');
+                await loadPlaces(tripId);
+                await initMap(tripId);
+            } else {
+                const err = await res.json();
+                alert('Ошибка: ' + (err.error || 'не удалось'));
+            }
+        }
+
+        async function loadPlaces(tripId) {
+            const res = await fetch(`/api/trips/${tripId}/places`);
+            const places = await res.json();
+            const wc = document.getElementById(`wishlist-${tripId}`);
+            if (wc) {
+                wc.innerHTML = places.length === 0
+                    ? '<div style="padding:15px;color:#999;">Пока пусто</div>'
+                    : places.map(p => `
+                        <div class="place-card">
+                            <img src="${escapeHtml(p.image_url || 'https://via.placeholder.com/400x200/667eea/ffffff?text=Place')}"
+                                 onerror="this.src='https://via.placeholder.com/400x200/667eea/ffffff?text=Place'"
+                                 alt="${escapeHtml(p.name)}">
+                            <div class="place-card-body">
+                                <h5>${escapeHtml(p.name)}</h5>
+                                ${p.address ? `<p>📍 ${escapeHtml(p.address)}</p>` : ''}
+                                ${p.visit_date ? `<p>📅 ${p.visit_date} ${p.visit_time || ''}</p>` : ''}
+                                ${p.latitude ? `<p style="color:#28a745;font-size:11px;">✅ На карте</p>`
+                                             : `<p style="color:#dc3545;font-size:11px;">⚠️ Нет координат</p>`}
+                            </div>
+                            <div class="place-card-actions">
+                                ${p.source_url ? `<a href="${escapeHtml(p.source_url)}" target="_blank">🔗</a>` : '<span></span>'}
+                                ${!p.latitude ? `<button class="btn btn-warning btn-sm" onclick="promptCoords(${p.id}, ${tripId})">📍</button>` : ''}
+                                ${p.latitude ? `<button class="btn btn-success btn-sm" onclick="showStops(${p.id}, ${tripId})">🚌</button>` : ''}
+                                <button class="btn btn-primary btn-sm" onclick="promptImage(${p.id}, ${tripId})">📷</button>
+                                <button class="btn btn-danger btn-sm" onclick="deletePlace(${p.id}, ${tripId})">🗑️</button>
+                            </div>
+                            <div id="stops-${p.id}" class="stops-block" style="display:none; padding:12px; background:#f8f9fa; border-top:1px solid #eee;"></div>
+                        </div>`).join('');
+            }
+            const pc = document.getElementById(`placesList-${tripId}`);
+            if (pc) {
+                pc.innerHTML = places.length === 0
+                    ? '<div style="padding:15px;color:#999;">Пусто</div>'
+                    : places.map(p => `
+                        <div class="list-item">
+                            <div>
+                                <strong>${escapeHtml(p.name)}</strong>
+                                ${p.address ? `<br>📍 ${escapeHtml(p.address)}` : ''}
+                                ${p.visit_date ? `<br>📅 ${p.visit_date} ${p.visit_time || ''}` : ''}
+                            </div>
+                            <button class="btn btn-danger btn-sm" onclick="deletePlace(${p.id}, ${tripId})">🗑️</button>
+                        </div>`).join('');
+            }
+        }
+
+        async function deletePlace(id, tripId) {
+            if (!confirm('Удалить?')) return;
+            await fetch(`/api/places/${id}`, {method:'DELETE'});
+            await loadPlaces(tripId);
+            await initMap(tripId);
+        }
+
+        async function promptCoords(placeId, tripId) {
+            const lat = prompt('Введите широту:');
+            if (!lat) return;
+            const lng = prompt('Введите долготу:');
+            if (!lng) return;
+            await fetch(`/api/places/${placeId}/set-coords`, {
+                method: 'PUT', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({latitude: parseFloat(lat), longitude: parseFloat(lng)})
+            });
+            await loadPlaces(tripId);
+            await initMap(tripId);
+        }
+
+        async function promptImage(placeId, tripId) {
+            const url = prompt('Вставь URL картинки:');
+            if (!url) return;
+            await fetch(`/api/places/${placeId}/set-image`, {
+                method: 'PUT', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({image_url: url})
+            });
+            await loadPlaces(tripId);
+        }
+
+        async function showStops(placeId, tripId) {
+            const block = document.getElementById(`stops-${placeId}`);
+            if (!block) return;
+            if (block.style.display === 'block') { block.style.display = 'none'; return; }
+            block.style.display = 'block';
+            block.innerHTML = '⏳ Ищем остановки...';
+            const res = await fetch(`/api/places/${placeId}/stops`);
+            const stops = await res.json();
+            if (!stops.length) {
+                block.innerHTML = '<div style="color:#999;font-size:13px;">😔 Не найдено</div>';
+                return;
+            }
+            block.innerHTML = `
+                <div style="font-weight:bold; margin-bottom:8px; font-size:14px;">🚌 Ближайшие остановки:</div>
+                ${stops.map(s => `
+                    <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed #ddd; font-size:13px;">
+                        <div><b>${escapeHtml(s.name)}</b><br><span style="color:#666; font-size:12px;">${escapeHtml(s.types)}${s.routes ? ' · ' + escapeHtml(s.routes) : ''}</span></div>
+                        <div style="color:#667eea; font-weight:bold;">${s.distance_m} м</div>
+                    </div>`).join('')}
+                <div style="font-size:11px; color:#999; margin-top:8px;">Данные: OpenStreetMap</div>`;
+        }
+
+        // ===== МАРШРУТ =====
+        async function setRouteStart(tripId) {
+            const address = document.getElementById(`routeStart-${tripId}`).value.trim();
+            if (!address) return alert('Введите адрес старта');
+            const res = await fetch(`/api/trips/${tripId}/route-start`, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({address})
+            });
+            const data = await res.json();
+            const infoDiv = document.getElementById(`routeStartInfo-${tripId}`);
+            if (data.success) {
+                infoDiv.innerHTML = `<div style="padding:10px;background:#d4edda;color:#155724;border-radius:8px;">✅ Старт: ${escapeHtml(address)}</div>`;
+                await initMap(tripId);
+            } else {
+                infoDiv.innerHTML = `<div style="padding:10px;background:#f8d7da;color:#721c24;border-radius:8px;">❌ ${escapeHtml(data.error || 'Ошибка')}</div>`;
+            }
+        }
+
+        async function loadRouteStart(tripId) {
+            const res = await fetch(`/api/trips/${tripId}/route-start`);
+            const data = await res.json();
+            if (data.address) {
+                const input = document.getElementById(`routeStart-${tripId}`);
+                if (input) input.value = data.address;
+                const infoDiv = document.getElementById(`routeStartInfo-${tripId}`);
+                if (infoDiv && data.latitude) {
+                    infoDiv.innerHTML = `<div style="padding:10px;background:#d4edda;color:#155724;border-radius:8px;">✅ Текущий старт: ${escapeHtml(data.address)}</div>`;
+                }
+            }
+        }
+
+        async function initMap(tripId) {
+            const el = document.getElementById(`map-${tripId}`);
+            if (!el) return;
+            if (maps[tripId]) { maps[tripId].remove(); delete maps[tripId]; }
+            const map = L.map(`map-${tripId}`).setView([57.6261, 39.8845], 10);
+            maps[tripId] = map;
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'© OSM', maxZoom:19}).addTo(map);
+
+            const startRes = await fetch(`/api/trips/${tripId}/route-start`);
+            const start = await startRes.json();
+            if (start.latitude && start.longitude) {
+                L.marker([start.latitude, start.longitude], {
+                    icon: L.divIcon({
+                        html: '<div style="background:#28a745;color:white;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:20px;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3);">🚩</div>',
+                        iconSize: [36, 36], iconAnchor: [18, 18]
+                    })
+                }).addTo(map).bindPopup(`<b>🚩 Старт</b><br>${escapeHtml(start.address || '')}`);
+            }
+
+            const res = await fetch(`/api/trips/${tripId}/places`);
+            const places = await res.json();
+            const validPlaces = places.filter(p => p.latitude && p.longitude);
+            validPlaces.forEach((p, idx) => {
+                L.marker([p.latitude, p.longitude], {
+                    icon: L.divIcon({
+                        html: `<div style="background:#667eea;color:white;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-weight:bold;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3);">${idx + 1}</div>`,
+                        iconSize: [32, 32], iconAnchor: [16, 16]
+                    })
+                }).addTo(map).bindPopup(`<b>${idx + 1}. ${escapeHtml(p.name)}</b>`);
+            });
+
+            const listDiv = document.getElementById(`routePlaceList-${tripId}`);
+            if (listDiv) {
+                if (validPlaces.length === 0) {
+                    listDiv.innerHTML = '<div style="color:#999;font-size:13px;">Нет мест с координатами</div>';
+                } else {
+                    listDiv.innerHTML = validPlaces.map((p, idx) => `
+                        <label class="route-place-item">
+                            <input type="checkbox" class="route-place-cb-${tripId}" value="${p.id}" checked>
+                            <div class="route-place-info">
+                                <b>${idx + 1}. ${escapeHtml(p.name)}</b>
+                                ${p.address ? `<small>📍 ${escapeHtml(p.address)}</small>` : ''}
+                            </div>
+                        </label>
+                    `).join('');
+                }
+            }
+
+            if (validPlaces.length > 0) {
+                const latlngs = validPlaces.map(p => [p.latitude, p.longitude]);
+                if (start.latitude && start.longitude) latlngs.push([start.latitude, start.longitude]);
+                map.fitBounds(L.latLngBounds(latlngs).pad(0.2));
+            }
+            setTimeout(() => map.invalidateSize(), 150);
+        }
+
+        function routeSelectAll(tripId, checked) {
+            document.querySelectorAll(`.route-place-cb-${tripId}`).forEach(cb => cb.checked = checked);
+        }
+
+        async function buildRoute(tripId) {
+            const checked = Array.from(document.querySelectorAll(`.route-place-cb-${tripId}:checked`)).map(cb => cb.value).join(',');
+            if (!checked) return alert('Выбери хотя бы одно место');
+            const infoDiv = document.getElementById(`routeInfo-${tripId}`);
+            infoDiv.style.display = 'block';
+            infoDiv.innerHTML = '⏳ Строим маршрут...';
+            const res = await fetch(`/api/trips/${tripId}/route?place_ids=${checked}`);
+            const route = await res.json();
+            if (!route.success) {
+                infoDiv.innerHTML = `<span style="color:#dc3545;">⚠️ ${route.error || 'Ошибка'}</span>`;
+                return;
+            }
+            const map = maps[tripId];
+            if (map) {
+                map.eachLayer(l => { if (l instanceof L.Polyline && !(l instanceof L.Marker)) map.removeLayer(l); });
+            }
+            const polyline = L.polyline(route.polyline, {color: '#667eea', weight: 5, opacity: 0.85}).addTo(map);
+            infoDiv.innerHTML = '<span style="color:#28a745;">✅ Маршрут построен</span>';
+            map.fitBounds(polyline.getBounds().pad(0.1));
+        }
+
+        async function loadDebts(tripId) {
+            const res = await fetch(`/api/trips/${tripId}/debts`);
+            const debts = await res.json();
+            const c = document.getElementById(`debtsList-${tripId}`);
+            if (c) {
+                c.innerHTML = debts.length === 0
+                    ? '<div class="debt-empty">💚 Нет долгов, всё честно!</div>'
+                    : debts.map(d => `
+                        <div class="debt-item">
+                            <div class="debt-info">👤 <b>${escapeHtml(d.from_user)}</b> → 👤 <b>${escapeHtml(d.to_user)}</b></div>
+                            <div class="debt-amount">${d.amount} ₽</div>
+                        </div>`).join('');
+            }
+        }
+
+        async function calculateDebts(tripId) {
+            await fetch(`/api/trips/${tripId}/calculate`, {method:'POST'});
+            await loadDebts(tripId);
+        }
+
+        async function inviteParticipant(tripId) {
+            const login = document.getElementById(`participantLogin-${tripId}`).value.trim();
+            if (!login) return alert('Введите логин');
+            const res = await fetch(`/api/trips/${tripId}/invite`, {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({login})
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert(`✉️ Приглашение отправлено`);
+                document.getElementById(`participantLogin-${tripId}`).value = '';
+            } else alert(data.error || 'Ошибка');
+        }
+
+        async function loadParticipants(tripId) {
+            const res = await fetch(`/api/trips/${tripId}/participants`);
+            const parts = await res.json();
+            const c = document.getElementById(`participantsList-${tripId}`);
+            if (c) {
+                c.innerHTML = parts.length === 0
+                    ? '<div style="padding:15px;color:#999;">Нет участников</div>'
+                    : parts.map(p => `
+                        <div class="list-item">
+                            <span>👤 ${escapeHtml(p.login)}</span>
+                            <span>${p.role === 'organizer' ? '👑 Организатор' : '📎 Участник'}</span>
+                        </div>`).join('');
+            }
+            const opts = '<option value="">Не назначен</option>' + parts.map(p =>
+                `<option value="${p.id}">${escapeHtml(p.login)}</option>`).join('');
+            const cl = document.getElementById(`checklistAssigned-${tripId}`);
+            if (cl) cl.innerHTML = opts;
+        }
+
+        async function openInvitations() {
+            document.getElementById('invModal').classList.add('show');
+            await loadInvitations();
+        }
+        function closeInvitations() {
+            document.getElementById('invModal').classList.remove('show');
+        }
+
+        async function loadInvitations() {
+            const res = await fetch('/api/invitations');
+            const invs = await res.json();
+            const badge = document.getElementById('invBadge');
+            const list = document.getElementById('invList');
+            if (invs.length > 0) {
+                badge.style.display = 'inline-block';
+                badge.textContent = invs.length;
+                list.innerHTML = invs.map(i => `
+                    <div class="inv-item">
+                        <div><b>${escapeHtml(i.from_user)}</b> приглашает в <b>«${escapeHtml(i.trip_name)}»</b></div>
+                        <small style="color:#999;">${i.created_at}</small>
+                        <div class="actions">
+                            <button class="btn btn-success btn-sm" onclick="acceptInv(${i.id})">✅ Принять</button>
+                            <button class="btn btn-danger btn-sm" onclick="declineInv(${i.id})">❌ Отклонить</button>
+                        </div>
+                    </div>`).join('');
+            } else {
+                badge.style.display = 'none';
+                list.innerHTML = '<div style="padding:20px;text-align:center;color:#999;">Приглашений нет</div>';
+            }
+        }
+
+        async function acceptInv(id) {
+            await fetch(`/api/invitations/${id}/accept`, {method:'POST'});
+            alert('✅ Вы приняли приглашение!');
+            closeInvitations();
+            location.reload();
+        }
+        async function declineInv(id) {
+            await fetch(`/api/invitations/${id}/decline`, {method:'POST'});
+            closeInvitations();
+            loadInvitations();
+        }
+
+        async function loadNotifications() {
+            const res = await fetch('/api/notifications');
+            const ns = await res.json();
+            const badge = document.getElementById('notifBadge');
+            const list = document.getElementById('notifList');
+            if (ns.length > 0) {
+                badge.style.display = 'inline-block';
+                badge.textContent = ns.length;
+                list.innerHTML = ns.map(n => `
+                    <div class="notification-item">
+                        <div>${escapeHtml(n.message)}</div>
+                        <small>${n.created_at}</small>
+                    </div>`).join('');
+            } else {
+                badge.style.display = 'none';
+                list.innerHTML = '<div class="notification-empty">Нет новых</div>';
+            }
+        }
+
+        function toggleNotifications() {
+            document.getElementById('notificationPanel').classList.toggle('show');
+        }
+        async function markAllNotificationsRead() {
+            await fetch('/api/notifications/read-all', {method:'PUT'});
+            document.getElementById('notificationPanel').classList.remove('show');
+            loadNotifications();
+        }
+        document.addEventListener('click', e => {
+            if (!e.target.closest('.notification-bell')) {
+                document.getElementById('notificationPanel').classList.remove('show');
+            }
+        });
+
+        loadTrips();
+        loadNotifications();
+        loadInvitations();
+        setInterval(() => { loadNotifications(); loadInvitations(); }, 15000);
+    </script>
+</body>
+</html>

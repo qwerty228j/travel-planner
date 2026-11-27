@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Вход | Travel Planner</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: system-ui, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .auth-container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            width: 100%;
+            max-width: 450px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            font-size: 14px;
+        }
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        button:hover {
+            background: #5a67d8;
+            transform: translateY(-2px);
+        }
+        .switch {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+        }
+        .switch a {
+            color: #667eea;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <h1>🌍 Travel Planner</h1>
+        <div class="subtitle" id="formTitle">Вход в систему</div>
+        
+        <div id="errorMsg" class="error hidden"></div>
+        
+        <input type="text" id="login" placeholder="Логин">
+        <input type="email" id="email" placeholder="Email" class="hidden">
+        <input type="password" id="password" placeholder="Пароль">
+        
+        <button id="submitBtn" onclick="submitForm()">Войти</button>
+        
+        <div class="switch">
+            <span id="switchText">Нет аккаунта?</span>
+            <a id="switchLink" onclick="toggleMode()">Зарегистрироваться</a>
+        </div>
+    </div>
+
+    <script>
+        let isLogin = true;
+        
+        function toggleMode() {
+            isLogin = !isLogin;
+            const title = document.getElementById('formTitle');
+            const emailField = document.getElementById('email');
+            const submitBtn = document.getElementById('submitBtn');
+            const switchText = document.getElementById('switchText');
+            const switchLink = document.getElementById('switchLink');
+            
+            if (isLogin) {
+                title.textContent = 'Вход в систему';
+                emailField.classList.add('hidden');
+                submitBtn.textContent = 'Войти';
+                switchText.textContent = 'Нет аккаунта?';
+                switchLink.textContent = 'Зарегистрироваться';
+            } else {
+                title.textContent = 'Регистрация';
+                emailField.classList.remove('hidden');
+                submitBtn.textContent = 'Зарегистрироваться';
+                switchText.textContent = 'Уже есть аккаунт?';
+                switchLink.textContent = 'Войти';
+            }
+        }
+        
+        async function submitForm() {
+            const login = document.getElementById('login').value;
+            const password = document.getElementById('password').value;
+            const email = document.getElementById('email').value;
+            const errorDiv = document.getElementById('errorMsg');
+            
+            if (!login || !password) {
+                errorDiv.textContent = 'Заполните все поля';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+            
+            if (!isLogin && !email) {
+                errorDiv.textContent = 'Введите email';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+            
+            const url = isLogin ? '/api/login' : '/api/register';
+            const body = isLogin ? {login, password} : {login, email, password};
+            
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(body)
+            });
+            
+            const data = await res.json();
+            
+            if (data.success) {
+                window.location.href = '/';
+            } else {
+                errorDiv.textContent = data.error || 'Ошибка';
+                errorDiv.classList.remove('hidden');
+            }
+        }
+        
+        document.getElementById('password').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') submitForm();
+        });
+    </script>
+</body>
+</html>
